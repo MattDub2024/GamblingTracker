@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bet Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="icon" href="data:,">
+  <style>
+    /* Simple scrollbar & table tweaks */
+    ::-webkit-scrollbar { height: 10px; width: 10px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
+    .input { @apply border rounded-md px-3 py-2 w-full bg-white; }
+    .btn { @apply inline-flex items-center gap-2 rounded-md px-3 py-2 bg-slate-900 text-white hover:bg-slate-800; }
+    .btn-secondary { @apply bg-white text-slate-900 border hover:bg-slate-50; }
+    .btn-danger { @apply bg-rose-600 hover:bg-rose-700 text-white; }
+    .badge { @apply text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700; }
+    .card { @apply bg-white rounded-2xl shadow-sm border; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <div class="max-w-6xl mx-auto p-4 md:p-6">
+    <header class="flex items-center justify-between mb-6 gap-4">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-bold">Bet Tracker</h1>
+        <p class="text-sm text-slate-500">Track every wager. Analyze performance. Own your edge.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="addBtn" class="btn">+ Add Bet</button>
+        <button id="exportBtn" class="btn btn-secondary">Export JSON</button>
+        <label class="btn btn-secondary cursor-pointer">
+          <input id="importFile" type="file" accept="application/json" class="hidden">
+          Import JSON
+        </label>
+        <button id="clearBtn" class="btn btn-danger">Clear All</button>
+      </div>
+    </header>
+
+    <!-- Filters -->
+    <div class="card p-4 mb-6">
+      <div class="grid md:grid-cols-6 gap-3 items-end">
+        <div class="md:col-span-2">
+          <label class="text-xs text-slate-500">Search</label>
+          <input id="q" class="input" placeholder="book, event, market, notes...">
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Result</label>
+          <select id="fResult" class="input">
+            <option>All</option><option>Pending</option><option>Won</option><option>Lost</option><option>Push</option><option>Void</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Sport</label>
+          <select id="fSport" class="input">
+            <option>All</option><option>NFL</option><option>NBA</option><option>MLB</option><option>NHL</option>
+            <option>NCAAF</option><option>NCAAB</option><option>Soccer</option><option>Tennis</option><option>Golf</option><option>MMA</option><option>Other</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">From</label>
+          <input id="fFrom" type="date" class="input">
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">To</label>
+          <input id="fTo" type="date" class="input">
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid md:grid-cols-4 gap-4 mb-6">
+      <div class="card p-4">
+        <div class="text-base font-semibold mb-1">Realized P&L</div>
+        <div id="sRealized" class="text-2xl font-bold">—</div>
+        <div id="sROI" class="text-xs text-slate-500 mt-1">ROI —</div>
+      </div>
+      <div class="card p-4">
+        <div class="text-base font-semibold mb-1">Total Staked</div>
+        <div id="sStaked" class="text-2xl font-bold">—</div>
+        <div id="sPendingStake" class="text-xs text-slate-500 mt-1">Pending stake —</div>
+      </div>
+      <div class="card p-4">
+        <div class="text-base font-semibold mb-1">Record</div>
+        <div id="sRecord" class="text-2xl font-bold">—</div>
+        <div id="sPending" class="text-xs text-slate-500 mt-1">0 pending</div>
+      </div>
+      <div class="card p-4">
+        <div class="text-base font-semibold mb-1">Bets Tracked</div>
+        <div id="sCount" class="text-2xl font-bold">—</div>
+        <div class="text-xs text-slate-500 mt-1">All time</div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="card p-4 mb-6">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-lg font-semibold">Cumulative P&L</div>
+        <span id="chartEmpty" class="badge hidden">No completed bets yet</span>
+      </div>
+      <div class="h-64">
+        <canvas id="pnlChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+      <div class="p-4 pb-3 flex items-center justify-between">
+        <div class="text-lg font-semibold">Bets</div>
+        <span id="countBadge" class="badge">0</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-slate-500 border-t">
+              <th class="py-2 pr-3">Date</th>
+              <th class="py-2 pr-3">Book</th>
+              <th class="py-2 pr-3">Sport</th>
+              <th class="py-2 pr-3">Event / Market</th>
+              <th class="py-2 pr-3">Odds</th>
+              <th class="py-2 pr-3">Stake</th>
+              <th class="py-2 pr-3">Result</th>
+              <th class="py-2 pr-3">Payout (if Win)</th>
+              <th class="py-2 pr-3">Realized</th>
+              <th class="py-2 pr-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div id="empty" class="text-center py-10 text-slate-500 hidden">No bets found. Try adjusting filters.</div>
+      </div>
+    </div>
+
+    <footer class="text-xs text-slate-500 text-center my-6">
+      Data is stored locally in your browser (no server). Export regularly for backup.
+    </footer>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal" class="fixed inset-0 bg-black/30 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="card p-4 w-full max-w-2xl">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-lg font-semibold" id="modalTitle">Add a Bet</div>
+        <button id="closeModal" class="btn btn-secondary">Close</button>
+      </div>
+      <div class="grid md:grid-cols-3 gap-3">
+        <div>
+          <label class="text-xs text-slate-500">Date</label>
+          <input id="mDate" type="date" class="input">
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Book</label>
+          <input id="mBook" class="input" placeholder="DraftKings, FanDuel...">
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Sport</label>
+          <select id="mSport" class="input">
+            <option>NFL</option><option>NBA</option><option>MLB</option><option>NHL</option>
+            <option>NCAAF</option><option>NCAAB</option><option>Soccer</option><option>Tennis</option><option>Golf</option><option>MMA</option><option>Other</option>
+          </select>
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-xs text-slate-500">Event</label>
+          <input id="mEvent" class="input" placeholder="Team A vs Team B">
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Market</label>
+          <input id="mMarket" class="input" placeholder="Moneyline, Spread -3.5, Over 210.5">
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Odds Type</label>
+          <select id="mOddsType" class="input">
+            <option>American</option><option>Decimal</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Odds</label>
+          <input id="mOdds" class="input" placeholder="-120 or 1.83">
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Stake ($)</label>
+          <input id="mStake" class="input" placeholder="25">
+        </div>
+        <div>
+          <label class="text-xs text-slate-500">Result</label>
+          <select id="mResult" class="input">
+            <option>Pending</option><option>Won</option><option>Lost</option><option>Push</option><option>Void</option>
+          </select>
+        </div>
+        <div class="md:col-span-3">
+          <label class="text-xs text-slate-500">Notes</label>
+          <textarea id="mNotes" rows="3" class="input" placeholder="Reasoning, CLV, injuries..."></textarea>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-3">
+        <button id="saveBet" class="btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
